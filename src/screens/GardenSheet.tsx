@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goldenApple } from '../assets';
 import TreeSprite from '../components/TreeSprite';
@@ -10,7 +10,7 @@ import { colors, DOW, fonts, STAGE_NAMES } from '../theme';
 import { keyOf, sunday, weekDays } from '../utils/date';
 
 export default function GardenSheet() {
-  const { state, patch, complete, appleCount } = useGarden();
+  const { state, patch, complete, appleCount, reset } = useGarden();
   const insets = useSafeAreaInsets();
   const now = new Date(state.now);
   const todayKey = keyOf(now);
@@ -28,6 +28,17 @@ export default function GardenSheet() {
     : `Complete ${stage === 1 && weekDone === 0 ? 'today' : 'one more day'} to reach stage ${Math.min(7, stage + 1)}.`;
 
   const close = () => patch({ showTree: false });
+
+  const confirmRestart = () => {
+    Alert.alert(
+      'Restart onboarding?',
+      'This clears your name, favorites, goals, and history, and starts over from the beginning. This can\'t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restart', style: 'destructive', onPress: reset },
+      ],
+    );
+  };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={close}>
@@ -104,6 +115,10 @@ export default function GardenSheet() {
                 );
               })}
             </View>
+
+            <Pressable style={styles.restartBtn} onPress={confirmRestart}>
+              <Text style={styles.restartBtnText}>Restart onboarding</Text>
+            </Pressable>
           </ScrollView>
         </View>
       </View>
@@ -136,4 +151,6 @@ const styles = StyleSheet.create({
   dayDot: { height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', width: '100%' },
   dayDotMark: { color: colors.parchment, fontSize: 13, fontFamily: fonts.sansBold },
   dayLabel: { fontFamily: fonts.sansSemi, fontSize: 9.5, color: colors.inkFaint45, marginTop: 6 },
+  restartBtn: { marginTop: 20, borderWidth: 1, borderColor: 'rgba(180,64,47,.3)', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
+  restartBtnText: { fontFamily: fonts.sansSemi, fontSize: 12.5, color: colors.red },
 });
