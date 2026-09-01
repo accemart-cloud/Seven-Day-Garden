@@ -7,6 +7,45 @@ import { Category, DayEntry, GardenState, PERSIST_KEYS } from './types';
 
 const KEY = 'sevenDayGarden.v1';
 
+// One-time content fix: "Strategic Card Games (Bridge, Chess)" was split into
+// two separate activities. Saved data from before the split still has the
+// old combined label baked into lists/favs/log, so rewrite it on load.
+const OLD_CARD_GAMES_LABEL = 'Strategic Card Games (Bridge, Chess)';
+const NEW_CARD_GAMES_LABEL = 'Strategic Card Games';
+const CHESS_LABEL = 'Chess';
+const PROBLEM_SOLVING_CATEGORY = 'Active Problem Solving & Brain Exercises';
+
+function migrateSavedActivityLabels(saved: any): any {
+  if (!saved) return saved;
+  const rename = (arr?: string[]) => arr?.map((n) => (n === OLD_CARD_GAMES_LABEL ? NEW_CARD_GAMES_LABEL : n));
+
+  if (saved.lists) {
+    (['phys', 'ment'] as const).forEach((cat) => {
+      const groups = saved.lists[cat];
+      if (!Array.isArray(groups)) return;
+      groups.forEach((g: any) => {
+        if (Array.isArray(g.items)) g.items = rename(g.items);
+        if (g.cat === PROBLEM_SOLVING_CATEGORY && Array.isArray(g.items) && !g.items.includes(CHESS_LABEL)) {
+          g.items.push(CHESS_LABEL);
+        }
+      });
+    });
+  }
+  if (saved.favs) {
+    (['phys', 'ment'] as const).forEach((cat) => {
+      if (Array.isArray(saved.favs[cat])) saved.favs[cat] = rename(saved.favs[cat]);
+    });
+  }
+  if (saved.log) {
+    Object.values(saved.log).forEach((e: any) => {
+      if (!e) return;
+      if (Array.isArray(e.phys)) e.phys = rename(e.phys);
+      if (Array.isArray(e.ment)) e.ment = rename(e.ment);
+    });
+  }
+  return saved;
+}
+
 function initialState(): GardenState {
   return {
     screen: 'name', nameDraft: '', name: '', startedAt: null,
@@ -49,7 +88,7 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(KEY);
-        const saved = raw ? JSON.parse(raw) : null;
+        const saved = raw ? migrateSavedActivityLabels(JSON.parse(raw)) : null;
         if (saved) setState((prev) => ({ ...prev, ...saved, now: Date.now() }));
       } catch {
         // ignore corrupt storage

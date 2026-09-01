@@ -8,7 +8,7 @@ export const PHYS: ActivityGroupSource[] = [
 ];
 
 export const MENT: ActivityGroupSource[] = [
-  ['Active Problem Solving & Brain Exercises', ['Strategic Card Games (Bridge, Chess)', 'Crossword Puzzles', 'Sudoku or Number Puzzles', 'Jigsaw Puzzles', 'Using a Computer for Research']],
+  ['Active Problem Solving & Brain Exercises', ['Strategic Card Games', 'Chess', 'Crossword Puzzles', 'Sudoku or Number Puzzles', 'Jigsaw Puzzles', 'Using a Computer for Research']],
   ['Continuous Learning & Neuroplasticity', ['Learning a Foreign Language', 'Playing a Musical Instrument', 'Reading Engaging Literature', 'Writing or Journaling', 'Taking an Education Class', 'Attending Lectures or Seminars', 'Learning a New Skill or Hobby']],
   ['Creative & Manual Dexterity', ['Crafting (Knitting, Painting)', 'Orienteering and Navigating']],
   ['Social Cognitive Engagement', ['Active Volunteering', 'Joining a Book Club', 'Hosting Social Gatherings']],
