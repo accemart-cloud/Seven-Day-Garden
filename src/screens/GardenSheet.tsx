@@ -10,7 +10,7 @@ import { colors, DOW, fonts, STAGE_NAMES } from '../theme';
 import { keyOf, sunday, weekDays } from '../utils/date';
 
 export default function GardenSheet() {
-  const { state, patch, complete, appleCount, seedDemo } = useGarden();
+  const { state, patch, complete, appleCount } = useGarden();
   const insets = useSafeAreaInsets();
   const now = new Date(state.now);
   const todayKey = keyOf(now);
@@ -34,7 +34,7 @@ export default function GardenSheet() {
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={close} />
         <View style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
             <View style={styles.grabberRow}>
               <View style={styles.grabber} />
             </View>
@@ -104,10 +104,6 @@ export default function GardenSheet() {
                 );
               })}
             </View>
-
-            <Pressable style={styles.seedBtn} onPress={seedDemo}>
-              <Text style={styles.seedBtnText}>Load three weeks of sample history</Text>
-            </Pressable>
           </ScrollView>
         </View>
       </View>
@@ -140,6 +136,4 @@ const styles = StyleSheet.create({
   dayDot: { height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', width: '100%' },
   dayDotMark: { color: colors.parchment, fontSize: 13, fontFamily: fonts.sansBold },
   dayLabel: { fontFamily: fonts.sansSemi, fontSize: 9.5, color: colors.inkFaint45, marginTop: 6 },
-  seedBtn: { marginTop: 20, borderWidth: 1, borderColor: colors.inkFaint18, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
-  seedBtnText: { fontFamily: fonts.sansSemi, fontSize: 12.5, color: colors.inkFaint60 },
 });

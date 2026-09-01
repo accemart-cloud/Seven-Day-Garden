@@ -33,7 +33,6 @@ interface GardenApi {
   toggleDone: (cat: Category, name: string) => void;
   addActivity: () => void;
   addDaily: () => void;
-  seedDemo: () => void;
   reset: () => void;
   startTimer: () => void;
   resetTimer: () => void;
@@ -161,32 +160,6 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const seedDemo = useCallback(() => {
-    setState((prev) => {
-      const now = new Date(prev.now);
-      const log: GardenState['log'] = {};
-      const pf = prev.favs.phys.length ? prev.favs.phys : ['Brisk Walking', 'Yoga'];
-      const mf = prev.favs.ment.length ? prev.favs.ment : ['Mindful Meditation', 'Reading Engaging Literature', 'Crossword Puzzles'];
-      for (let back = 21; back >= 0; back--) {
-        const d = new Date(now);
-        d.setDate(now.getDate() - back);
-        if (back === 0) continue;
-        const full = back > 7 || back % 4 !== 0;
-        log[keyOf(d)] = {
-          phys: pf.slice(0, full ? Math.max(prev.goalPhys, 1) : 0),
-          ment: mf.slice(0, full ? Math.max(prev.goalMent, 1) : 1),
-        };
-      }
-      const start = new Date(now);
-      start.setDate(now.getDate() - 21);
-      const next = { ...prev, log, startedAt: start.getTime(), showTree: true };
-      const keep: Partial<GardenState> = {};
-      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
-      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
-      return next;
-    });
-  }, []);
-
   const reset = useCallback(() => {
     AsyncStorage.removeItem(KEY).catch(() => {});
     setState(initialState());
@@ -229,9 +202,9 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<GardenApi>(() => ({
     state, ready, patch, save, entry: entryFn, complete, appleCount,
-    submitName, toggleFav, toggleDone, addActivity, addDaily, seedDemo, reset,
+    submitName, toggleFav, toggleDone, addActivity, addDaily, reset,
     startTimer, resetTimer,
-  }), [state, ready, patch, save, entryFn, complete, appleCount, submitName, toggleFav, toggleDone, addActivity, addDaily, seedDemo, reset, startTimer, resetTimer]);
+  }), [state, ready, patch, save, entryFn, complete, appleCount, submitName, toggleFav, toggleDone, addActivity, addDaily, reset, startTimer, resetTimer]);
 
   return <GardenCtx.Provider value={value}>{children}</GardenCtx.Provider>;
 }
