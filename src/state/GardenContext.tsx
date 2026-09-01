@@ -1,0 +1,245 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { MENT, PHYS } from '../data/activities';
+import { fromKey, keyOf, sunday, weekDays } from '../utils/date';
+import { appleCount as computeAppleCount, entry as computeEntry, isComplete, mkLists } from './gardenLogic';
+import { Category, DayEntry, GardenState, PERSIST_KEYS } from './types';
+
+const KEY = 'sevenDayGarden.v1';
+
+function initialState(): GardenState {
+  return {
+    screen: 'name', nameDraft: '', name: '', startedAt: null,
+    lists: { phys: mkLists(PHYS), ment: mkLists(MENT) },
+    favs: { phys: [], ment: [] },
+    goalPhys: 1, goalMent: 1,
+    log: {}, tab: 'phys', newActDraft: '', newActCat: PHYS[0][0],
+    view: 'home', activeCat: null, addingDaily: false, dailyDraft: '',
+    breathPhase: 'idle', breathLeft: 300, doneLeft: 10, breathCount: 0,
+    showTree: false, monthShift: 0, selKey: null, now: Date.now(),
+  };
+}
+
+interface GardenApi {
+  state: GardenState;
+  ready: boolean;
+  patch: (p: Partial<GardenState>) => void;
+  save: (p: Partial<GardenState>) => void;
+  entry: (key: string) => DayEntry;
+  complete: (key: string) => boolean;
+  appleCount: () => number;
+  submitName: () => void;
+  toggleFav: (cat: Category, name: string) => void;
+  toggleDone: (cat: Category, name: string) => void;
+  addActivity: () => void;
+  addDaily: () => void;
+  seedDemo: () => void;
+  reset: () => void;
+  startTimer: () => void;
+  resetTimer: () => void;
+}
+
+const GardenCtx = createContext<GardenApi | null>(null);
+
+export function GardenProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<GardenState>(initialState);
+  const [ready, setReady] = useState(false);
+  const breathTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(KEY);
+        const saved = raw ? JSON.parse(raw) : null;
+        if (saved) setState((prev) => ({ ...prev, ...saved, now: Date.now() }));
+      } catch {
+        // ignore corrupt storage
+      } finally {
+        setReady(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setState((prev) => ({ ...prev, now: Date.now() })), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const patch = useCallback((p: Partial<GardenState>) => {
+    setState((prev) => ({ ...prev, ...p }));
+  }, []);
+
+  const save = useCallback((p: Partial<GardenState>) => {
+    setState((prev) => {
+      const next = { ...prev, ...p };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const entryFn = useCallback((key: string) => computeEntry(state.log, key), [state.log]);
+  const complete = useCallback((key: string) => isComplete(state.log, key, state.goalPhys, state.goalMent), [state.log, state.goalPhys, state.goalMent]);
+  const appleCount = useCallback(() => computeAppleCount(state.log, state.goalPhys, state.goalMent), [state.log, state.goalPhys, state.goalMent]);
+
+  const submitName = useCallback(() => {
+    setState((prev) => {
+      const n = prev.nameDraft.trim();
+      if (!n) return prev;
+      const next = { ...prev, name: n, startedAt: Date.now(), screen: 'started' as const };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const toggleFav = useCallback((cat: Category, name: string) => {
+    setState((prev) => {
+      const favs = { phys: prev.favs.phys.slice(), ment: prev.favs.ment.slice() };
+      const arr = favs[cat];
+      const i = arr.indexOf(name);
+      if (i >= 0) arr.splice(i, 1);
+      else if (arr.length < 5) arr.push(name);
+      const next = { ...prev, favs };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const toggleDone = useCallback((cat: Category, name: string) => {
+    setState((prev) => {
+      const k = keyOf(new Date(prev.now));
+      const e = computeEntry(prev.log, k);
+      const next0 = { phys: e.phys.slice(), ment: e.ment.slice() };
+      const i = next0[cat].indexOf(name);
+      if (i >= 0) next0[cat].splice(i, 1); else next0[cat].push(name);
+      const log = { ...prev.log, [k]: next0 };
+      const next = { ...prev, log };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((kk) => { (keep as any)[kk] = (next as any)[kk]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const addActivity = useCallback(() => {
+    setState((prev) => {
+      const n = prev.newActDraft.trim();
+      if (!n) return prev;
+      const lists = {
+        phys: mkLists(prev.lists.phys.map((g) => [g.cat, g.items] as [string, string[]])),
+        ment: mkLists(prev.lists.ment.map((g) => [g.cat, g.items] as [string, string[]])),
+      };
+      const g = lists[prev.tab].find((g) => g.cat === prev.newActCat) || lists[prev.tab][0];
+      g.items.push(n);
+      const next = { ...prev, lists, newActDraft: '' };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const addDaily = useCallback(() => {
+    setState((prev) => {
+      const n = prev.dailyDraft.trim();
+      if (!n || !prev.activeCat) return prev;
+      const todayKey = keyOf(new Date(prev.now));
+      const e0 = computeEntry(prev.log, todayKey);
+      const next0 = { phys: e0.phys.slice(), ment: e0.ment.slice() };
+      next0[prev.activeCat].push(n);
+      const log = { ...prev.log, [todayKey]: next0 };
+      const next = { ...prev, log, dailyDraft: '', addingDaily: false };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const seedDemo = useCallback(() => {
+    setState((prev) => {
+      const now = new Date(prev.now);
+      const log: GardenState['log'] = {};
+      const pf = prev.favs.phys.length ? prev.favs.phys : ['Brisk Walking', 'Yoga'];
+      const mf = prev.favs.ment.length ? prev.favs.ment : ['Mindful Meditation', 'Reading Engaging Literature', 'Crossword Puzzles'];
+      for (let back = 21; back >= 0; back--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - back);
+        if (back === 0) continue;
+        const full = back > 7 || back % 4 !== 0;
+        log[keyOf(d)] = {
+          phys: pf.slice(0, full ? Math.max(prev.goalPhys, 1) : 0),
+          ment: mf.slice(0, full ? Math.max(prev.goalMent, 1) : 1),
+        };
+      }
+      const start = new Date(now);
+      start.setDate(now.getDate() - 21);
+      const next = { ...prev, log, startedAt: start.getTime(), showTree: true };
+      const keep: Partial<GardenState> = {};
+      PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+      AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const reset = useCallback(() => {
+    AsyncStorage.removeItem(KEY).catch(() => {});
+    setState(initialState());
+  }, []);
+
+  const startTimer = useCallback(() => {
+    if (breathTimer.current) return;
+    setState((prev) => ({ ...prev, breathPhase: 'run', breathLeft: 300 }));
+    breathTimer.current = setInterval(() => {
+      setState((prev) => {
+        if (prev.breathPhase === 'run') {
+          const left = prev.breathLeft - 1;
+          if (left <= 0) {
+            const next = { ...prev, breathPhase: 'done' as const, breathLeft: 0, doneLeft: 10, breathCount: (prev.breathCount || 0) + 1 };
+            const keep: Partial<GardenState> = {};
+            PERSIST_KEYS.forEach((k) => { (keep as any)[k] = (next as any)[k]; });
+            AsyncStorage.setItem(KEY, JSON.stringify(keep)).catch(() => {});
+            return next;
+          }
+          return { ...prev, breathLeft: left };
+        } else if (prev.breathPhase === 'done') {
+          const d = prev.doneLeft - 1;
+          if (d <= 0) {
+            if (breathTimer.current) { clearInterval(breathTimer.current); breathTimer.current = null; }
+            return { ...prev, breathPhase: 'idle', breathLeft: 300 };
+          }
+          return { ...prev, doneLeft: d };
+        }
+        return prev;
+      });
+    }, 1000);
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    if (breathTimer.current) { clearInterval(breathTimer.current); breathTimer.current = null; }
+    setState((prev) => ({ ...prev, breathPhase: 'idle', breathLeft: 300, doneLeft: 10 }));
+  }, []);
+
+  useEffect(() => () => { if (breathTimer.current) clearInterval(breathTimer.current); }, []);
+
+  const value = useMemo<GardenApi>(() => ({
+    state, ready, patch, save, entry: entryFn, complete, appleCount,
+    submitName, toggleFav, toggleDone, addActivity, addDaily, seedDemo, reset,
+    startTimer, resetTimer,
+  }), [state, ready, patch, save, entryFn, complete, appleCount, submitName, toggleFav, toggleDone, addActivity, addDaily, seedDemo, reset, startTimer, resetTimer]);
+
+  return <GardenCtx.Provider value={value}>{children}</GardenCtx.Provider>;
+}
+
+export function useGarden(): GardenApi {
+  const ctx = useContext(GardenCtx);
+  if (!ctx) throw new Error('useGarden must be used within GardenProvider');
+  return ctx;
+}
+
+export { fromKey, keyOf, sunday, weekDays };
